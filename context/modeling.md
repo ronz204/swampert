@@ -1,4 +1,4 @@
-# Swampert — Modelado de dominio
+# Modelado de dominio de Swampert
 
 > Nota de alcance: este documento describe el **núcleo del sistema** — las entidades, sus reglas y cómo se relacionan entre sí — usando ideas de Domain-Driven Design (DDD). No es un documento de arquitectura ni de persistencia: acá no vas a encontrar tablas SQL, tipos de columna ni decisiones de framework (eso vive en `database.md` y en los documentos de arquitectura). La pregunta que responde este documento es: **¿cuáles son los conceptos del negocio y cómo se comportan entre sí?**
 >
@@ -98,3 +98,22 @@ La razón de fondo para separar estos agregados es que cada uno protege un conju
 - `AuditLog` es un flujo de solo escritura, que crece indefinidamente y nunca se toca una vez creado.
 
 Separar el modelo de esta forma permite razonar sobre cada parte del sistema de forma aislada: podés entender completamente cómo funciona una `Execution` sin necesidad de saber los detalles de cómo se gestiona una `Company`, y viceversa. Esa independencia conceptual es, en el fondo, el objetivo central de modelar el dominio con DDD.
+
+## Nota: DDD estratégico sí, DDD táctico no (por ahora)
+
+Vale la pena dejar explícito **hasta dónde llega DDD en este proyecto**, para que nadie (ni un colaborador humano, ni un copiloto futuro) asuma que hay que traducir este documento en código de forma literal.
+
+DDD se puede pensar en dos capas:
+
+- **Estratégico** — lenguaje ubicuo, agregados como frontera de invariantes y transacciones, value objects como concepto. Esto es lo que contiene este documento, y es *barato*: no depende de ningún framework ni de una capa extra en el código, y da vocabulario y fronteras conceptuales claras desde ya.
+- **Táctico** — clases de entidad con comportamiento propio, `Repository` pattern, servicios de dominio separados de servicios de aplicación, domain events como mecanismo de código. Esto normalmente va de la mano de un ORM, porque el `Repository` existe justamente para traducir entre objetos de dominio y filas de base de datos.
+
+**Decisión para Swampert: implementamos DDD estratégico, no táctico.** La razón no es que DDD "no aplique" — es que, en este proyecto concreto, todavía no hay complejidad de negocio real que justifique el costo de mantener una capa de dominio en código:
+
+- El stack elegido es SQL crudo con `asyncpg`, a propósito, por trazabilidad entre las queries documentadas y el código que corre. Meter entidades de dominio con comportamiento por encima obligaría a mantener dos representaciones del mismo dato (la fila SQL y el objeto de dominio) sin que ninguna regla real lo esté pidiendo todavía.
+- El dominio hoy es relativamente simple y estable: los agregados y sus invariantes ya están claros, pero no hay todavía una regla de negocio lo bastante intrincada como para necesitar encapsularse en una clase.
+- Construir la estructura táctica *especulando* que la complejidad va a aparecer es diseño especulativo (una variante de sobre-ingeniería): se paga el costo de construcción ahora, apostando a un beneficio futuro incierto.
+
+Esto **no** significa que el modelo de este documento sea decorativo. Al contrario: es la guía mental para escribir las queries y las funciones del backend — cuando se implemente algo sobre `Execution`, por ejemplo, el código debería respetar sus invariantes (no agregar steps a una execution cerrada, etc.), aunque esa regla viva como una validación en una función simple y no como un método de una clase `Execution`.
+
+**Cuándo reconsiderar esto**: el día que aparezca una regla de negocio genuinamente compleja (ejemplo: "una `Execution` no puede reintentarse más de 3 veces salvo que la `Task` sea de prioridad `high`"), ese dolor puntual es la señal de que vale la pena encapsular *ese* agregado específico en código — no una razón para adelantar la migración completa a DDD táctico hoy. La arquitectura estratégica que ya está documentada acá (agregados, invariantes, lenguaje ubicuo) es justamente lo que hace que ese cambio, cuando llegue, sea local y barato, en vez de una reescritura.
