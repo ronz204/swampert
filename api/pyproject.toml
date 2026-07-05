@@ -1,0 +1,9 @@
+[project]
+name = "swampert-api"
+description = "Agent Swarms for LLMs Agents"
+
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "ruff>=0.15.20",
+]
