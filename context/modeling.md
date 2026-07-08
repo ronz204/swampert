@@ -10,8 +10,8 @@ Antes de modelar nada, hay que ponerse de acuerdo en el vocabulario. Estos son l
 
 | Término (código) | Significado |
 |---|---|
-| **Company** | El cliente que usa Swampert. Es el "inquilino" (tenant) del sistema; todo lo demás pertenece a una company. |
-| **User** | Una persona humana que trabaja en una company y opera Swampert (configura agentes, revisa el dashboard, etc.). |
+| **Tenant** | El cliente que usa Swampert. Es el "inquilino" del sistema; todo lo demás pertenece a un tenant. Se identifica por un `slug` único (subdominio). |
+| **User** | Una persona humana que trabaja en un tenant y opera Swampert (configura agentes, revisa el dashboard, etc.). |
 | **Agent** | Una unidad individual de IA con un rol y unas herramientas asignadas. Es la "pieza" que puede formar parte de un swarm. |
 | **Swarm** | Un grupo de agents que colaboran para resolver tasks. |
 | **Task** | El trabajo concreto que se le encarga a un swarm resolver. |
@@ -29,11 +29,11 @@ En DDD, un **agregado** es un grupo de objetos que se tratan como una unidad a l
 
 Swampert tiene cinco agregados principales:
 
-### 1. Company (raíz: `Company`)
+### 1. Tenant (raíz: `Tenant`)
 
-Es el agregado de más alto nivel: representa al cliente. Es dueño, indirectamente, de todo lo demás en el sistema — ningún otro agregado puede existir sin estar asociado a una `Company`.
+Es el agregado de más alto nivel: representa al cliente. Es dueño, indirectamente, de todo lo demás en el sistema — ningún otro agregado puede existir sin estar asociado a un `Tenant`.
 
-**Invariante clave**: ninguna entidad de ningún otro agregado puede "cruzarse" entre companies. Un `Agent`, un `Swarm`, una `Task`, todo pertenece a exactamente una `Company`, y esa pertenencia nunca cambia.
+**Invariante clave**: ninguna entidad de ningún otro agregado puede "cruzarse" entre tenants. Un `Agent`, un `Swarm`, una `Task`, todo pertenece a exactamente un `Tenant`, y esa pertenencia nunca cambia.
 
 ### 2. Swarm (raíz: `Swarm`)
 
@@ -45,7 +45,7 @@ Un `Swarm` agrupa a los agents que lo componen. El swarm en sí es la raíz; los
 
 Una `Task` representa el encargo que se le hace a un swarm. Es un agregado relativamente simple, pero es el punto de partida de todo el resto del flujo: sin una task, no puede existir una execution.
 
-**Invariante clave**: una `Task` siempre pertenece a un único `Swarm` (el que fue designado para resolverla), y ese swarm debe pertenecer a la misma `Company` que la task.
+**Invariante clave**: una `Task` siempre pertenece a un único `Swarm` (el que fue designado para resolverla), y ese swarm debe pertenecer al mismo `Tenant` que la task.
 
 ### 4. Execution (raíz: `Execution`)
 
@@ -74,14 +74,14 @@ Además de los agregados, hay conceptos que no tienen identidad propia — no im
 
 - **ExecutionStatus**: uno de un conjunto fijo de valores (`pending`, `running`, `completed`, `failed`). No tiene sentido preguntarse "cuál status es este" más allá de su propio valor.
 - **TokenCost**: la combinación de `inputTokens`, `outputTokens` y `estimatedCost`. Tiene sentido como un paquete, no como números sueltos.
-- **AgentConfig**: el conjunto de parámetros (modelo base, herramientas disponibles, instrucciones) que definen cómo se comporta un `Agent`. Dos agents con exactamente la misma configuración no son "el mismo objeto de configuración" en el sentido de identidad, pero sí representan el mismo valor.
+- **AgentConfig**: el conjunto de parámetros (modelo base, herramientas disponibles, instrucciones) que definen cómo se comporta un `Agent`.
 
 ## Cómo fluye una historia típica por el sistema
 
 Para que todo esto no quede abstracto, así es como se recorren los agregados en un caso de uso típico:
 
-1. Una `Company` tiene configurado un `Swarm` con varios `Agent`.
-2. Un `User` de esa company crea una `Task` y se la asigna a ese swarm.
+1. Un `Tenant` tiene configurado un `Swarm` con varios `Agent`.
+2. Un `User` de ese tenant crea una `Task` y se la asigna a ese swarm.
 3. El swarm "resuelve" la task generando una `Execution`.
 4. Durante la execution, se van registrando `ExecutionStep` — cada uno hecho por uno de los agents del swarm.
 5. Cada step acumula su `TokenCost`, y si algo sale mal, se registra un `ExecutionError` asociado a ese step o a la execution completa.
@@ -92,28 +92,20 @@ Para que todo esto no quede abstracto, así es como se recorren los agregados en
 
 La razón de fondo para separar estos agregados es que cada uno protege un conjunto distinto de reglas, y cambian a ritmos distintos:
 
-- `Company` cambia muy poco (alta/baja de una company cliente, cambios de plan).
+- `Tenant` cambia muy poco (alta/baja de un tenant, cambios de plan).
 - `Swarm` cambia con frecuencia moderada (se agregan o quitan agents, se ajusta su configuración).
 - `Task` y `Execution` son el corazón operativo: se crean y cierran constantemente, y es donde vive la mayor parte de la actividad del sistema.
 - `AuditLog` es un flujo de solo escritura, que crece indefinidamente y nunca se toca una vez creado.
 
-Separar el modelo de esta forma permite razonar sobre cada parte del sistema de forma aislada: podés entender completamente cómo funciona una `Execution` sin necesidad de saber los detalles de cómo se gestiona una `Company`, y viceversa. Esa independencia conceptual es, en el fondo, el objetivo central de modelar el dominio con DDD.
+Separar el modelo de esta forma permite razonar sobre cada parte del sistema de forma aislada: podés entender completamente cómo funciona una `Execution` sin necesidad de saber los detalles de cómo se gestiona un `Tenant`, y viceversa. Esa independencia conceptual es, en el fondo, el objetivo central de modelar el dominio con DDD.
 
 ## Nota: DDD estratégico sí, DDD táctico no (por ahora)
 
-Vale la pena dejar explícito **hasta dónde llega DDD en este proyecto**, para que nadie (ni un colaborador humano, ni un copiloto futuro) asuma que hay que traducir este documento en código de forma literal.
-
 DDD se puede pensar en dos capas:
 
-- **Estratégico** — lenguaje ubicuo, agregados como frontera de invariantes y transacciones, value objects como concepto. Esto es lo que contiene este documento, y es *barato*: no depende de ningún framework ni de una capa extra en el código, y da vocabulario y fronteras conceptuales claras desde ya.
-- **Táctico** — clases de entidad con comportamiento propio, `Repository` pattern, servicios de dominio separados de servicios de aplicación, domain events como mecanismo de código. Esto normalmente va de la mano de un ORM, porque el `Repository` existe justamente para traducir entre objetos de dominio y filas de base de datos.
+- **Estratégico** — lenguaje ubicuo, agregados como frontera de invariantes y transacciones, value objects como concepto. Esto es lo que contiene este documento, y es *barato*: no depende de ningún framework ni de una capa extra en el código.
+- **Táctico** — clases de entidad con comportamiento propio, `Repository` pattern, servicios de dominio separados, domain events. Esto normalmente va de la mano de un ORM.
 
-**Decisión para Swampert: implementamos DDD estratégico, no táctico.** La razón no es que DDD "no aplique" — es que, en este proyecto concreto, todavía no hay complejidad de negocio real que justifique el costo de mantener una capa de dominio en código:
+**Decisión para Swampert: implementamos DDD estratégico, no táctico.** El stack elegido es SQL crudo con `asyncpg`, a propósito. Las invariantes de los agregados se implementan como validaciones en funciones simples, no como métodos de clase.
 
-- El stack elegido es SQL crudo con `asyncpg`, a propósito, por trazabilidad entre las queries documentadas y el código que corre. Meter entidades de dominio con comportamiento por encima obligaría a mantener dos representaciones del mismo dato (la fila SQL y el objeto de dominio) sin que ninguna regla real lo esté pidiendo todavía.
-- El dominio hoy es relativamente simple y estable: los agregados y sus invariantes ya están claros, pero no hay todavía una regla de negocio lo bastante intrincada como para necesitar encapsularse en una clase.
-- Construir la estructura táctica *especulando* que la complejidad va a aparecer es diseño especulativo (una variante de sobre-ingeniería): se paga el costo de construcción ahora, apostando a un beneficio futuro incierto.
-
-Esto **no** significa que el modelo de este documento sea decorativo. Al contrario: es la guía mental para escribir las queries y las funciones del backend — cuando se implemente algo sobre `Execution`, por ejemplo, el código debería respetar sus invariantes (no agregar steps a una execution cerrada, etc.), aunque esa regla viva como una validación en una función simple y no como un método de una clase `Execution`.
-
-**Cuándo reconsiderar esto**: el día que aparezca una regla de negocio genuinamente compleja (ejemplo: "una `Execution` no puede reintentarse más de 3 veces salvo que la `Task` sea de prioridad `high`"), ese dolor puntual es la señal de que vale la pena encapsular *ese* agregado específico en código — no una razón para adelantar la migración completa a DDD táctico hoy. La arquitectura estratégica que ya está documentada acá (agregados, invariantes, lenguaje ubicuo) es justamente lo que hace que ese cambio, cuando llegue, sea local y barato, en vez de una reescritura.
+**Cuándo reconsiderar esto**: el día que aparezca una regla de negocio genuinamente compleja que no pueda vivir limpiamente en una función simple — ese dolor puntual es la señal, no una razón para adelantar la migración completa a DDD táctico hoy.
