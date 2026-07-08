@@ -1,0 +1,163 @@
+// Swampert — Modelo de persistencia
+// Pegar directo en https://dbdiagram.io para visualizar
+
+Enum company_plan {
+  basic
+  pro
+  enterprise
+}
+
+Enum user_role {
+  admin
+  member
+  viewer
+}
+
+Enum swarm_status {
+  active
+  paused
+  archived
+}
+
+Enum task_status {
+  pending
+  in_progress
+  completed
+  failed
+}
+
+Enum task_priority {
+  low
+  medium
+  high
+}
+
+Enum execution_status {
+  pending
+  running
+  completed
+  failed
+}
+
+Enum error_severity {
+  low
+  medium
+  high
+  critical
+}
+
+Table core.companies {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name text
+  tax_id text [unique]
+  plan company_plan
+  is_active boolean [default: true]
+  created_at timestamptz [default: `now()`]
+}
+
+Table core.users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  company_id uuid [ref: > core.companies.id]
+  name text
+  email text [unique]
+  password text [note: 'bcrypt via pgcrypto crypt()/gen_salt(bf)']
+  role user_role
+  is_active boolean [default: true]
+  created_at timestamptz [default: `now()`]
+}
+
+Table core.agents {
+  id uuid [pk, default: `gen_random_uuid()`]
+  company_id uuid [ref: > core.companies.id]
+  name text
+  role text
+  base_model text
+  tools "text[]"
+  config jsonb
+  is_active boolean [default: true]
+  created_at timestamptz [default: `now()`]
+}
+
+Table core.swarms {
+  id uuid [pk, default: `gen_random_uuid()`]
+  company_id uuid [ref: > core.companies.id]
+  name text
+  description text
+  status swarm_status
+  created_at timestamptz [default: `now()`]
+}
+
+Table core.swarm_agents {
+  swarm_id uuid [ref: > core.swarms.id]
+  agent_id uuid [ref: > core.agents.id]
+  added_at timestamptz [default: `now()`]
+
+  indexes {
+    (swarm_id, agent_id) [pk]
+  }
+}
+
+Table core.tasks {
+  id uuid [pk, default: `gen_random_uuid()`]
+  company_id uuid [ref: > core.companies.id]
+  swarm_id uuid [ref: > core.swarms.id]
+  title text
+  description text
+  status task_status
+  priority task_priority
+  created_at timestamptz [default: `now()`]
+}
+
+Table tracer.executions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  company_id uuid [ref: > core.companies.id]
+  task_id uuid [ref: > core.tasks.id]
+  attempt_number integer
+  status execution_status
+  started_at timestamptz
+  finished_at timestamptz [note: 'nulo mientras está en curso']
+}
+
+Table tracer.execution_steps {
+  id uuid [pk, default: `gen_random_uuid()`]
+  company_id uuid [ref: > core.companies.id, note: 'denormalizado desde executions.company_id']
+  execution_id uuid [ref: > tracer.executions.id]
+  agent_id uuid [ref: > core.agents.id]
+  step_number integer
+  reasoning jsonb
+  tools_used "text[]"
+  occurred_at timestamptz [default: `now()`]
+}
+
+Table tracer.token_costs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  company_id uuid [ref: > core.companies.id, note: 'denormalizado desde executions.company_id']
+  execution_id uuid [ref: > tracer.executions.id]
+  step_id uuid [ref: > tracer.execution_steps.id, note: 'nulo si el costo es a nivel de execution']
+  input_tokens integer
+  output_tokens integer
+  estimated_cost "numeric(10,4)"
+  recorded_at timestamptz [default: `now()`]
+}
+
+Table tracer.execution_errors {
+  id uuid [pk, default: `gen_random_uuid()`]
+  company_id uuid [ref: > core.companies.id, note: 'denormalizado desde executions.company_id']
+  execution_id uuid [ref: > tracer.executions.id]
+  step_id uuid [ref: > tracer.execution_steps.id, note: 'nulo si el error es a nivel de execution']
+  error_type text
+  message text
+  severity error_severity
+  occurred_at timestamptz [default: `now()`]
+}
+
+Table tracer.audit_logs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  company_id uuid [ref: > core.companies.id]
+  user_id uuid [ref: > core.users.id]
+  action text
+  entity_type text
+  entity_id uuid
+  details jsonb
+  occurred_at timestamptz [default: `now()`]
+}

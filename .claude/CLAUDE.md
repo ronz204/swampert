@@ -12,8 +12,8 @@ Referencia obligatoria antes de cualquier tarea no trivial: `context/overview.md
 
 | Término en código | Significado |
 |---|---|
-| `Company` | El cliente/tenant. Raíz de todo: nada existe sin pertenecer a una company. |
-| `User` | Humano que opera Swampert dentro de una company. |
+| `Tenant` | El cliente. Raíz de todo: nada existe sin pertenecer a un tenant. Se identifica por `slug` (subdominio). |
+| `User` | Humano que opera Swampert dentro de un tenant. |
 | `Agent` | Unidad de IA con rol y herramientas. Puede integrar varios swarms. |
 | `Swarm` | Grupo de agents que colaboran para resolver tasks. |
 | `Task` | El encargo concreto que se le hace a un swarm. |
@@ -47,11 +47,11 @@ swampert/
 
 ### Agregados y sus invariantes
 
-**Company** — raíz de todo el árbol. Ninguna entidad cruza de una company a otra, jamás.
+**Tenant** — raíz de todo el árbol. Ninguna entidad cruza de un tenant a otro, jamás.
 
 **Swarm** — necesita al menos un Agent para poder recibir Tasks. Un Swarm sin agents no puede ejecutar nada.
 
-**Task** — pertenece a un único Swarm, y ese Swarm debe ser de la misma Company.
+**Task** — pertenece a un único Swarm, y ese Swarm debe ser del mismo Tenant.
 
 **Execution** — el agregado más rico. Contiene ExecutionSteps, TokenCosts y ExecutionErrors. Reglas críticas:
 - El status solo avanza en una dirección válida: `pending → running → completed | failed`. Nunca regresa.
@@ -68,24 +68,24 @@ Se usa el lenguaje y los agregados de DDD para razonar sobre el dominio, pero **
 
 ## Base de datos — convenciones que no se negocian
 
-- **Clave primaria**: siempre `UUID`, generado en inserción. Nunca enteros autoincrementales.
-- **Aislamiento**: toda tabla cuyo contenido pertenece a una company lleva columna `company_id` (FK → `companies.id`) explícita, incluso si podría inferirse por JOIN. Esto es para que las políticas RLS y los índices de filtrado no dependan de joins.
+- **Clave primaria**: siempre `UUID`, generado en inserción con `gen_random_uuid()`. Nunca enteros autoincrementales.
+- **Aislamiento**: toda tabla cuyo contenido pertenece a un tenant lleva columna `tenant_id` (FK → `core.tenants.id`) explícita, incluso si podría inferirse por JOIN.
 - **Timestamps**: toda tabla tiene `created_at TIMESTAMPTZ`. Las que cambian de estado también tienen `updated_at`.
-- **ENUMs**: cualquier conjunto cerrado de valores se modela como `ENUM` de PostgreSQL, nunca como `TEXT` libre.
-- **RLS**: toda tabla con `company_id` lleva política de Row-Level Security. El aislamiento multi-tenant es una garantía de la base de datos, no de la aplicación.
+- **ENUMs**: cualquier conjunto cerrado de valores se modela como `ENUM` de PostgreSQL, en el mismo schema que la tabla que lo usa.
+- **RLS**: toda tabla con `tenant_id` lleva política de Row-Level Security. El aislamiento multi-tenant es una garantía de la base de datos, no de la aplicación.
 
 ### Tablas (en orden de estabilidad)
 
-`companies` → `users` → `agents` → `swarms` → `swarm_agents` (puente M:N) → `tasks` → `executions` → `execution_steps` → `token_costs` → `execution_errors` → `audit_logs`
+`core.tenants` → `core.users` → `core.agents` → `core.swarms` → `core.swarm_agents` (puente M:N) → `core.tasks` → `tracer.executions` → `tracer.execution_steps` → `tracer.token_costs` → `tracer.execution_errors` → `tracer.audit_logs`
 
 ### Particionamiento
 
-`executions` (por `started_at`) y `audit_logs` (por `occurred_at`) se particionan por rango mensual. Son las únicas tablas de crecimiento ilimitado.
+`tracer.executions` (por `started_at`) y `tracer.audit_logs` (por `occurred_at`) se particionan por rango mensual. Son las únicas tablas de crecimiento ilimitado.
 
 ### Tipos avanzados — por qué, no solo dónde
 
-- `JSONB` en `agents.config`, `execution_steps.reasoning`, `audit_logs.details`: datos semi-estructurados que varían por instancia — forzarlos a columnas separadas agrega complejidad sin beneficio.
-- `ARRAY(TEXT)` en `agents.tools`, `execution_steps.tools_used`: listas cortas y homogéneas.
+- `JSONB` en `agents.config`, `execution_steps.reasoning`, `audit_logs.details`: datos semi-estructurados que varían por instancia.
+- `TEXT[]` en `agents.tools`, `execution_steps.tools_used`: listas cortas y homogéneas.
 - Estos usos **no son violaciones de 1FN**: son decisiones de diseño deliberadas, comunes en PostgreSQL moderno, documentadas y justificadas.
 
 ---
@@ -94,7 +94,8 @@ Se usa el lenguaje y los agregados de DDD para razonar sobre el dominio, pero **
 
 ```bash
 # Base de datos (desde api/)
-docker compose up -d          # Levanta PostgreSQL 16
+docker compose up -d                          # Levanta PostgreSQL 16
+uv run python -m source.database.migrator     # Corre las migraciones
 
 # API (desde api/)
 uv run source/boot.py         # Punto de entrada (en desarrollo)
