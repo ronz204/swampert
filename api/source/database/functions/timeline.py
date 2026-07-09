@@ -1,28 +1,31 @@
 import asyncpg
 
+from pydantic import BaseModel
 from source.database.pooling import db
 
 
-async def fetch_executions_by_month(
-  swarm: str | None = None,
-  status: str | None = None,
-  from_date: str | None = None,
-  to_date: str | None = None,
-) -> list[asyncpg.Record]:
+class ExecutionsByMonthFilters(BaseModel):
+  swarm: str | None = None
+  status: str | None = None
+  from_date: str | None = None
+  to_date: str | None = None
+
+
+async def fetch_executions_by_month(filters: ExecutionsByMonthFilters) -> list[asyncpg.Record]:
   conditions = []
   args: list = []
 
-  if swarm:
-    args.append(f"%{swarm}%")
+  if filters.swarm:
+    args.append(f"%{filters.swarm}%")
     conditions.append(f"s.name ILIKE ${len(args)}")
-  if status:
-    args.append(status)
+  if filters.status:
+    args.append(filters.status)
     conditions.append(f"e.status = ${len(args)}")
-  if from_date:
-    args.append(from_date)
+  if filters.from_date:
+    args.append(filters.from_date)
     conditions.append(f"e.started_at >= ${len(args)}")
-  if to_date:
-    args.append(to_date)
+  if filters.to_date:
+    args.append(filters.to_date)
     conditions.append(f"e.started_at < ${len(args)}")
 
   where = ("WHERE " + " AND ".join(conditions)) if conditions else ""

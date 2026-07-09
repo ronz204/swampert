@@ -1,29 +1,32 @@
 import asyncpg
 
+from pydantic import BaseModel
 from source.database.pooling import db
 
 
-async def fetch_top_by_errors(
-  severity: list[str] | None = None,
-  error_type: str | None = None,
-  task: str | None = None,
-  limit: int = 15,
-) -> list[asyncpg.Record]:
+class TopByErrorsFilters(BaseModel):
+  severity: list[str] | None = None
+  error_type: str | None = None
+  task: str | None = None
+  limit: int = 15
+
+
+async def fetch_top_by_errors(filters: TopByErrorsFilters) -> list[asyncpg.Record]:
   conditions = []
   args: list = []
 
-  if severity:
-    args.append(severity)
+  if filters.severity:
+    args.append(filters.severity)
     conditions.append(f"ee.severity = ANY(${len(args)})")
-  if error_type:
-    args.append(f"%{error_type}%")
+  if filters.error_type:
+    args.append(f"%{filters.error_type}%")
     conditions.append(f"ee.error_type ILIKE ${len(args)}")
-  if task:
-    args.append(f"%{task}%")
+  if filters.task:
+    args.append(f"%{filters.task}%")
     conditions.append(f"t.title ILIKE ${len(args)}")
 
   where = ("WHERE " + " AND ".join(conditions)) if conditions else "WHERE ee.severity IN ('high', 'critical')"
-  args.append(limit)
+  args.append(filters.limit)
 
   return await db.fetch(f"""
     SELECT

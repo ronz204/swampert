@@ -1,14 +1,17 @@
 import asyncpg
 
+from pydantic import BaseModel
 from source.database.pooling import db
 
 
-async def fetch_top_by_cost(
-  limit: int = 20,
-  status: str | None = None,
-) -> list[asyncpg.Record]:
-  where = "AND e.status = $2" if status else ""
-  args: list = [limit, status] if status else [limit]
+class TopByCostFilters(BaseModel):
+  limit: int = 20
+  status: str | None = None
+
+
+async def fetch_top_by_cost(filters: TopByCostFilters) -> list[asyncpg.Record]:
+  where = "AND e.status = $2" if filters.status else ""
+  args = [filters.limit, filters.status] if filters.status else [filters.limit]
 
   return await db.fetch(f"""
     SELECT

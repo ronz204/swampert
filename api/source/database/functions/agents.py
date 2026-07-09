@@ -1,13 +1,16 @@
 import asyncpg
 
+from pydantic import BaseModel
 from source.database.pooling import db
 
 
-async def fetch_activity(
-  role: str | None = None,
-) -> list[asyncpg.Record]:
-  where = "WHERE a.role = $1" if role else ""
-  args: list = [role] if role else []
+class AgentActivityFilters(BaseModel):
+  role: str | None = None
+
+
+async def fetch_activity(filters: AgentActivityFilters) -> list[asyncpg.Record]:
+  where = "WHERE a.role = $1" if filters.role else ""
+  args = [filters.role] if filters.role else []
 
   return await db.fetch(f"""
     SELECT

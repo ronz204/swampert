@@ -1,13 +1,16 @@
 import asyncpg
 
+from pydantic import BaseModel
 from source.database.pooling import db
 
 
-async def fetch_success_rate(
-  name: str | None = None,
-) -> list[asyncpg.Record]:
-  where = "WHERE s.name ILIKE $1" if name else ""
-  args: list = [f"%{name}%"] if name else []
+class SwarmSuccessRateFilters(BaseModel):
+  name: str | None = None
+
+
+async def fetch_success_rate(filters: SwarmSuccessRateFilters) -> list[asyncpg.Record]:
+  where = "WHERE s.name ILIKE $1" if filters.name else ""
+  args = [f"%{filters.name}%"] if filters.name else []
 
   return await db.fetch(f"""
     SELECT
