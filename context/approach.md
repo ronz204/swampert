@@ -29,7 +29,7 @@ Este documento reúne, en un solo lugar, **todo lo que el proyecto está obligad
 
 - **Índices**:
   - Mínimo 2 índices no clúster B-Tree en columnas usadas frecuentemente en `WHERE`/`JOIN`/`ORDER BY`.
-  - Mínimo 1 índice clúster (tabla reorganizada físicamente con `CLUSTER tabla USING indice`), demostrando con `EXPLAIN` el cambio de `Seq Scan` a `Index Scan`.
+  - Mínimo 3 índices clúster (tabla reorganizada físicamente con `CLUSTER tabla USING indice`), demostrando con `EXPLAIN` el cambio de `Seq Scan` a `Index Scan` con menor costo tras el `CLUSTER`.
 - **Consultas optimizadas**: al menos 3 consultas que involucren 3 o más tablas cada una, cada una acompañada de:
   - Código SQL.
   - `EXPLAIN ANALYZE` sin índice.
