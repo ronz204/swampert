@@ -40,5 +40,11 @@ class Pooling:
   async def execute(self, query: str, *args) -> str:
     return await self.run("execute", query, *args)
 
+  async def fetchrow_system(self, query: str, *args) -> asyncpg.Record | None:
+    if self.pool is None:
+      raise RuntimeError("El pool no está inicializado — llamá a setup() primero")
+    async with self.pool.acquire() as conn:
+      return await conn.fetchrow(query, *args)
+
 
 db = Pooling()

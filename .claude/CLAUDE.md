@@ -98,7 +98,7 @@ docker compose up -d                          # Levanta PostgreSQL 16
 uv run python -m source.database.migrator     # Corre las migraciones
 
 # API (desde api/)
-uv run source/boot.py         # Punto de entrada (en desarrollo)
+uv run uvicorn source.boot:app # Servidor de desarrollo
 uv run ruff check source/     # Linter
 uv run ruff format source/    # Formatter
 
