@@ -6,9 +6,33 @@ from source.configs.database import settings
 tenant_id_var: ContextVar[str | None] = ContextVar("tenant_id", default=None)
 
 
-class Pooling:
+class QueryScope:
+  async def run(self, method: str, query: str, *args):
+    raise NotImplementedError
+
+  async def fetch(self, query: str, *args) -> list[asyncpg.Record]:
+    return await self.run("fetch", query, *args)
+
+  async def fetchrow(self, query: str, *args) -> asyncpg.Record | None:
+    return await self.run("fetchrow", query, *args)
+
+  async def execute(self, query: str, *args) -> str:
+    return await self.run("execute", query, *args)
+
+
+class SystemScope(QueryScope):
+  def __init__(self, pooling: "Pooling") -> None:
+    self.pooling = pooling
+
+  async def run(self, method: str, query: str, *args):
+    async with self.pooling.pool.acquire() as conn:
+      return await getattr(conn, method)(query, *args)
+
+
+class Pooling(QueryScope):
   def __init__(self) -> None:
     self.pool: asyncpg.Pool | None = None
+    self.system = SystemScope(self)
 
   async def setup(self) -> None:
     self.pool = await asyncpg.create_pool(settings.postgres_app_url, min_size=2, max_size=10)
@@ -30,21 +54,6 @@ class Pooling:
       async with conn.transaction():
         await conn.execute("SELECT set_config('app.tenant_id', $1, true)", tenant_id)
         return await getattr(conn, method)(query, *args)
-
-  async def fetch(self, query: str, *args) -> list[asyncpg.Record]:
-    return await self.run("fetch", query, *args)
-
-  async def fetchrow(self, query: str, *args) -> asyncpg.Record | None:
-    return await self.run("fetchrow", query, *args)
-
-  async def execute(self, query: str, *args) -> str:
-    return await self.run("execute", query, *args)
-
-  async def fetchrow_system(self, query: str, *args) -> asyncpg.Record | None:
-    if self.pool is None:
-      raise RuntimeError("El pool no está inicializado — llamá a setup() primero")
-    async with self.pool.acquire() as conn:
-      return await conn.fetchrow(query, *args)
 
 
 db = Pooling()

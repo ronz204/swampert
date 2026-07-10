@@ -19,7 +19,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
     if not slug or slug in ("localhost", "127"):
       return JSONResponse({"detail": "tenant no especificado — accedé con subdominio: <slug>.localhost"}, status_code=400)
 
-    row = await db.fetchrow_system("SELECT core.resolve_tenant_id($1) AS id", slug)
+    row = await db.system.fetchrow("SELECT core.resolve_tenant_id($1) AS id", slug)
     tenant_id = row["id"] if row else None
 
     if not tenant_id:
