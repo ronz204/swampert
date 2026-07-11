@@ -1,7 +1,6 @@
 import asyncpg
 
 from uuid import UUID
-from decimal import Decimal
 from datetime import datetime
 from pydantic import BaseModel
 from source.database.pooling import db
@@ -18,7 +17,7 @@ class TopByCostRow(BaseModel):
   status: str
   started_at: datetime
   total_tokens: int
-  costo_total: Decimal
+  costo_total: float
 
 
 class TopByCost:

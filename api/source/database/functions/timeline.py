@@ -1,6 +1,6 @@
 import asyncpg
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel
 from source.database.pooling import db
 
@@ -34,10 +34,10 @@ class ExecutionsByMonth:
       args.append(filters.status)
       conditions.append(f"e.status = ${len(args)}")
     if filters.from_date:
-      args.append(filters.from_date)
+      args.append(datetime.fromisoformat(filters.from_date).replace(tzinfo=timezone.utc))
       conditions.append(f"e.started_at >= ${len(args)}")
     if filters.to_date:
-      args.append(filters.to_date)
+      args.append(datetime.fromisoformat(filters.to_date).replace(tzinfo=timezone.utc))
       conditions.append(f"e.started_at < ${len(args)}")
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
