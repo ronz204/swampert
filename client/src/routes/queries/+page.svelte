@@ -1,0 +1,286 @@
+<script lang="ts">
+  import type { PageProps } from "./$types";
+  import type { ExecutionStatus, ErrorSeverity } from "@models/entities";
+  import FilterChip         from "@shared/molecules/FilterChip.svelte";
+  import DataTable          from "@shared/molecules/DataTable.svelte";
+  import SuccessRateTable   from "@shared/molecules/SuccessRateTable.svelte";
+  import AgentActivityTable from "@shared/molecules/AgentActivityTable.svelte";
+  import TimelineTable      from "@shared/molecules/TimelineTable.svelte";
+  import ErrorsTable        from "@shared/molecules/ErrorsTable.svelte";
+
+  let { data }: PageProps = $props();
+
+  type QueryId = "q1" | "q2" | "q3" | "q4" | "q5";
+
+  const QUERIES: { id: QueryId; label: string; subtitle: string }[] = [
+    { id: "q1", label: "Top por costo",      subtitle: "Ejecuciones ordenadas por gasto en tokens" },
+    { id: "q2", label: "Tasa de éxito",      subtitle: "Completadas vs fallidas por swarm" },
+    { id: "q3", label: "Actividad agentes",  subtitle: "Steps y tokens promedio por agente" },
+    { id: "q4", label: "Timeline",           subtitle: "Ejecuciones agrupadas por mes y swarm" },
+    { id: "q5", label: "Top errores",        subtitle: "Tareas con mayor incidencia de fallas" },
+  ];
+
+  let activeQuery = $state<QueryId>("q1");
+
+  // ── Q1 filters ───────────────────────────────────────────────────────────────
+  let statusFilters = $state<ExecutionStatus[]>([]);
+  const filteredQ1 = $derived(
+    statusFilters.length === 0
+      ? data.topCost
+      : data.topCost.filter(r => statusFilters.includes(r.status))
+  );
+
+  // ── Q2 filters ───────────────────────────────────────────────────────────────
+  let swarmSearch = $state("");
+  const filteredQ2 = $derived(
+    swarmSearch.trim() === ""
+      ? data.successRate
+      : data.successRate.filter(r =>
+          r.swarm.toLowerCase().includes(swarmSearch.toLowerCase())
+        )
+  );
+
+  // ── Q3 filters ───────────────────────────────────────────────────────────────
+  let roleFilter = $state("");
+  const filteredQ3 = $derived(
+    roleFilter === ""
+      ? data.agentActivity
+      : data.agentActivity.filter(r => r.role === roleFilter)
+  );
+  const agentRoles = $derived([...new Set(data.agentActivity.map(r => r.role))].sort());
+
+  // ── Q4 filters ───────────────────────────────────────────────────────────────
+  let timelineSwarmSearch = $state("");
+  const filteredQ4 = $derived(
+    timelineSwarmSearch.trim() === ""
+      ? data.timeline
+      : data.timeline.filter(r =>
+          r.swarm.toLowerCase().includes(timelineSwarmSearch.toLowerCase())
+        )
+  );
+
+  // ── Q5 filters ───────────────────────────────────────────────────────────────
+  const ALL_SEVERITIES: ErrorSeverity[] = ["critical", "high", "medium", "low"];
+  let severityFilters = $state<ErrorSeverity[]>(["critical", "high"]);
+  const filteredQ5 = $derived(
+    severityFilters.length === 0
+      ? data.topErrors
+      : data.topErrors.filter(r => severityFilters.includes(r.severity as ErrorSeverity))
+  );
+
+  function toggleSeverity(s: ErrorSeverity) {
+    severityFilters = severityFilters.includes(s)
+      ? severityFilters.filter(x => x !== s)
+      : [...severityFilters, s];
+  }
+
+  function toggleStatus(s: ExecutionStatus) {
+    statusFilters = statusFilters.includes(s)
+      ? statusFilters.filter(x => x !== s)
+      : [...statusFilters, s];
+  }
+
+  function resetFilters() {
+    statusFilters = [];
+    swarmSearch = "";
+    roleFilter = "";
+    timelineSwarmSearch = "";
+    severityFilters = ["critical", "high"];
+  }
+
+  const activeChips = $derived<{ label: string; remove: () => void }[]>([
+    ...statusFilters.map(s => ({ label: `Status: ${s}`, remove: () => toggleStatus(s) })),
+    ...(swarmSearch && activeQuery === "q2" ? [{ label: `Swarm: ${swarmSearch}`, remove: () => { swarmSearch = ""; } }] : []),
+    ...(roleFilter && activeQuery === "q3" ? [{ label: `Rol: ${roleFilter}`, remove: () => { roleFilter = ""; } }] : []),
+    ...(timelineSwarmSearch && activeQuery === "q4" ? [{ label: `Swarm: ${timelineSwarmSearch}`, remove: () => { timelineSwarmSearch = ""; } }] : []),
+    ...((activeQuery === "q5" ? severityFilters : []).map(s => ({ label: `Severidad: ${s}`, remove: () => toggleSeverity(s) }))),
+  ]);
+
+  const rowCount = $derived({
+    q1: filteredQ1.length,
+    q2: filteredQ2.length,
+    q3: filteredQ3.length,
+    q4: filteredQ4.length,
+    q5: filteredQ5.length,
+  });
+</script>
+
+<svelte:head>
+  <title>Consultas — Swampert</title>
+</svelte:head>
+
+<div class="flex gap-5">
+  <!-- ── Filter panel ─────────────────────────────────────────────────── -->
+  <aside class="flex w-52 shrink-0 flex-col gap-4 rounded-lg border border-border bg-panel p-4 text-sm">
+
+    <!-- Q1: status -->
+    {#if activeQuery === "q1"}
+      <div>
+        <p class="mb-2 text-xs font-medium uppercase tracking-wide text-subtext">Status</p>
+        <ul class="space-y-1">
+          {#each ["pending","running","completed","failed"] as s}
+            <li>
+              <label class="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-border/40">
+                <input
+                  type="checkbox"
+                  class="accent-current"
+                  checked={statusFilters.includes(s as ExecutionStatus)}
+                  onchange={() => toggleStatus(s as ExecutionStatus)}
+                />
+                <span class="font-mono text-xs text-ink capitalize">{s}</span>
+                <span class="ml-auto font-mono text-xs text-subtext">
+                  {data.topCost.filter(r => r.status === s).length}
+                </span>
+              </label>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    <!-- Q2: swarm search -->
+    {#if activeQuery === "q2"}
+      <div>
+        <p class="mb-2 text-xs font-medium uppercase tracking-wide text-subtext">Swarm</p>
+        <input
+          type="search"
+          placeholder="Buscar swarm…"
+          class="w-full rounded border border-border bg-void px-2 py-1.5 font-mono text-xs
+            text-ink placeholder:text-subtext focus:border-current focus:outline-none"
+          bind:value={swarmSearch}
+        />
+      </div>
+    {/if}
+
+    <!-- Q3: role -->
+    {#if activeQuery === "q3"}
+      <div>
+        <p class="mb-2 text-xs font-medium uppercase tracking-wide text-subtext">Rol</p>
+        <ul class="space-y-1">
+          {#each agentRoles as role}
+            <li>
+              <label class="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-border/40">
+                <input
+                  type="radio"
+                  name="role"
+                  class="accent-current"
+                  checked={roleFilter === role}
+                  onchange={() => { roleFilter = roleFilter === role ? "" : role; }}
+                />
+                <span class="font-mono text-xs text-ink">{role}</span>
+                <span class="ml-auto font-mono text-xs text-subtext">
+                  {data.agentActivity.filter(r => r.role === role).length}
+                </span>
+              </label>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    <!-- Q4: swarm search -->
+    {#if activeQuery === "q4"}
+      <div>
+        <p class="mb-2 text-xs font-medium uppercase tracking-wide text-subtext">Swarm</p>
+        <input
+          type="search"
+          placeholder="Buscar swarm…"
+          class="w-full rounded border border-border bg-void px-2 py-1.5 font-mono text-xs
+            text-ink placeholder:text-subtext focus:border-current focus:outline-none"
+          bind:value={timelineSwarmSearch}
+        />
+      </div>
+    {/if}
+
+    <!-- Q5: severity -->
+    {#if activeQuery === "q5"}
+      <div>
+        <p class="mb-2 text-xs font-medium uppercase tracking-wide text-subtext">Severidad</p>
+        <ul class="space-y-1">
+          {#each ALL_SEVERITIES as sev}
+            <li>
+              <label class="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-border/40">
+                <input
+                  type="checkbox"
+                  class="accent-current"
+                  checked={severityFilters.includes(sev)}
+                  onchange={() => toggleSeverity(sev)}
+                />
+                <span class="font-mono text-xs capitalize
+                  {sev === 'critical' ? 'text-alarm' : sev === 'high' ? 'text-caution' : 'text-subtext'}">
+                  {sev}
+                </span>
+                <span class="ml-auto font-mono text-xs text-subtext">
+                  {data.topErrors.filter(r => r.severity === sev).length}
+                </span>
+              </label>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    <div class="mt-auto flex gap-2 border-t border-border pt-4">
+      <button
+        type="button"
+        class="flex-1 rounded px-3 py-1.5 text-xs text-subtext hover:text-ink
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-current"
+        onclick={resetFilters}
+      >
+        Reiniciar
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main content ─────────────────────────────────────────────────── -->
+  <div class="min-w-0 flex-1 space-y-4">
+
+    <!-- Query tabs -->
+    <div class="flex items-end gap-0 border-b border-border">
+      {#each QUERIES as q}
+        <button
+          type="button"
+          class="px-4 py-2 text-sm transition-colors
+            {activeQuery === q.id
+              ? 'border-b-2 border-current text-current font-medium -mb-px'
+              : 'text-subtext hover:text-ink'}"
+          onclick={() => { activeQuery = q.id; }}
+        >
+          {q.label}
+        </button>
+      {/each}
+    </div>
+
+    <!-- Active query info + row count -->
+    {#each QUERIES.filter(q => q.id === activeQuery) as q}
+      <div class="flex items-center justify-between">
+        <p class="text-xs text-subtext">{q.subtitle}</p>
+        <span class="font-mono text-xs text-subtext">
+          {rowCount[activeQuery]} resultado{rowCount[activeQuery] !== 1 ? "s" : ""}
+        </span>
+      </div>
+    {/each}
+
+    <!-- Active filter chips -->
+    {#if activeChips.length > 0}
+      <div class="flex flex-wrap gap-2">
+        {#each activeChips as chip}
+          <FilterChip label={chip.label} onremove={chip.remove} />
+        {/each}
+      </div>
+    {/if}
+
+    <!-- Table -->
+    {#if activeQuery === "q1"}
+      <DataTable rows={filteredQ1} />
+    {:else if activeQuery === "q2"}
+      <SuccessRateTable rows={filteredQ2} />
+    {:else if activeQuery === "q3"}
+      <AgentActivityTable rows={filteredQ3} />
+    {:else if activeQuery === "q4"}
+      <TimelineTable rows={filteredQ4} />
+    {:else if activeQuery === "q5"}
+      <ErrorsTable rows={filteredQ5} />
+    {/if}
+  </div>
+</div>
