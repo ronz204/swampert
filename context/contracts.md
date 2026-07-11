@@ -21,6 +21,30 @@ Todas las queries corren bajo RLS con el `tenant_id` resuelto — nunca se filtr
 
 ## Endpoints
 
+### GET `/dashboard/kpis`
+
+Los cuatro indicadores escalares del Dashboard. Todas las métricas reflejan el
+mismo rango de tiempo para garantizar coherencia visual entre las tarjetas KPI.
+Cuando no se envía rango, el sistema usa las últimas 24 horas como ventana.
+
+**Query params**
+
+| Param | Tipo | Default | Descripción |
+|---|---|---|---|
+| `from_date` | `string` | `NOW() - 24h` | Límite inferior inclusivo — formato `YYYY-MM-DD` |
+| `to_date` | `string` | `NOW()` | Límite superior exclusivo — formato `YYYY-MM-DD` |
+
+**Respuesta** `200 application/json` — objeto único:
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `executions_count` | `integer` | Ejecuciones iniciadas en el rango |
+| `total_cost` | `number` | Suma de `estimated_cost` en USD, con precisión decimal |
+| `error_rate` | `number \| null` | Porcentaje de ejecuciones fallidas (1 decimal) · `null` si no hay ejecuciones |
+| `active_agents` | `integer` | Agentes distintos con al menos un step en el rango |
+
+---
+
 ### GET `/agents/activity`
 
 Actividad agregada por agente: pasos ejecutados, tokens promedio y última actividad.
