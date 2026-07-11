@@ -3,17 +3,17 @@
 -- Propósito: poblar la base con datos realistas para demostración de rendimiento (R-11).
 --
 -- Distribución objetivo:
---   · core.tenants              →    5
---   · core.users                →   20  (4 por tenant)
---   · core.agents               →   30  (6 por tenant)
---   · core.swarms               →   20  (4 por tenant)
---   · core.swarm_agents         →  ~60  (~3 por swarm)
---   · core.tasks                →  200  (10 por swarm)
---   · tracer.executions         →  ~400 (2 por task)
---   · tracer.execution_steps    → ~2000 (5 por execution)   ← tabla principal R-11
---   · tracer.token_costs        →  ~600 (1-2 por execution)  ← tabla principal R-11
---   · tracer.execution_errors   →   ~80 (solo executions fallidas)
---   · tracer.audit_logs         →  ~100 (5 por usuario)
+--   · core.tenants              →     5
+--   · core.users                →    20  (4 por tenant)
+--   · core.agents               →    30  (6 por tenant)
+--   · core.swarms               →    20  (4 por tenant)
+--   · core.swarm_agents         →   ~60  (~3 por swarm)
+--   · core.tasks                →   500  (25 por swarm)
+--   · tracer.executions         →  5000  (10 por task)        ← tabla principal R-11
+--   · tracer.execution_steps    → 25000  (5 por execution)    ← tabla principal R-11
+--   · tracer.token_costs        → ~7500  (1-2 por execution)  ← tabla principal R-11
+--   · tracer.execution_errors   →  ~800  (solo executions fallidas)
+--   · tracer.audit_logs         →  ~100  (5 por usuario)
 --
 -- Estrategia de FKs: tablas temporales de sesión como puente entre bloques DO.
 -- El seed corre como superuser → RLS no aplica.
@@ -40,6 +40,7 @@ BEGIN
       (ARRAY['basic','pro','enterprise']::core.tenant_plan[])[1 + (random() * 2)::int],
       true
     FROM generate_series(1, 5) i
+    ON CONFLICT (slug) DO NOTHING
     RETURNING id
   )
   INSERT INTO _seed_tenants (id)
@@ -134,7 +135,7 @@ BEGIN
   WHERE random() < 0.4
   ON CONFLICT DO NOTHING;
 
-  -- tasks: 10 por swarm = 200
+  -- tasks: 25 por swarm = 500
   WITH ins AS (
     INSERT INTO core.tasks (tenant_id, swarm_id, title, description, status, priority)
     SELECT
@@ -143,19 +144,27 @@ BEGIN
       ttl || ' #' || row_number() OVER (ORDER BY sw.id, ttl),
       'Tarea autogenerada: ' || lower(ttl),
       (CASE
-        WHEN r < 0.15 THEN 'pending'
-        WHEN r < 0.25 THEN 'progress'
-        WHEN r < 0.85 THEN 'completed'
+        WHEN r < 0.10 THEN 'pending'
+        WHEN r < 0.18 THEN 'progress'
+        WHEN r < 0.82 THEN 'completed'
         ELSE               'failed'
       END)::core.task_status,
       (ARRAY['low','medium','high']::core.task_priority[])[1 + (random() * 2)::int]
     FROM _seed_swarms sw
     CROSS JOIN unnest(ARRAY[
-      'Analyze market trends',    'Generate quarterly report',
-      'Summarize research papers', 'Validate dataset integrity',
-      'Extract KPIs from logs',    'Classify support tickets',
-      'Draft executive summary',   'Audit configuration changes',
-      'Benchmark model responses', 'Detect anomalies in metrics'
+      'Analyze market trends',      'Generate quarterly report',
+      'Summarize research papers',  'Validate dataset integrity',
+      'Extract KPIs from logs',     'Classify support tickets',
+      'Draft executive summary',    'Audit configuration changes',
+      'Benchmark model responses',  'Detect anomalies in metrics',
+      'Profile system bottlenecks', 'Evaluate agent performance',
+      'Cluster feedback topics',    'Rank document relevance',
+      'Map dependency graph',       'Simulate load scenarios',
+      'Score sentiment in reviews', 'Identify duplicate entries',
+      'Normalize pricing data',     'Generate test fixtures',
+      'Monitor token budgets',      'Archive stale executions',
+      'Compare model outputs',      'Flag policy violations',
+      'Rebuild search index'
     ]) AS ttl
     CROSS JOIN LATERAL (SELECT random() AS r) rnd
     RETURNING id, tenant_id
@@ -165,32 +174,46 @@ BEGIN
 
 END $block1$;
 
--- ── BLOQUE 2 — executions ─────────────────────────────────────────────────────
+-- ── BLOQUE 2 — executions (10 por task = 5 000) ──────────────────────────────
 -- Tabla particionada por started_at: los valores deben caer en 2026-04 a 2026-09
+--
+-- IMPORTANTE: no usar CROSS JOIN LATERAL (SELECT random()) sin FROM.
+-- Sin referencia a columnas externas el planner lo trata como subquery constante
+-- y evalúa random() una sola vez → todos los rows quedan con el mismo started_at.
+-- Solución: CTE con FROM explícito garantiza evaluación por fila.
 DO $block2$
 BEGIN
 
-  WITH ins AS (
-    INSERT INTO tracer.executions (tenant_id, task_id, attempt_number, status, started_at, finished_at)
+  WITH expanded AS (
     SELECT
       tk.tenant_id,
-      tk.id,
-      e,
-      (CASE
-        WHEN r < 0.10 THEN 'pending'
-        WHEN r < 0.20 THEN 'running'
-        WHEN r < 0.80 THEN 'completed'
-        ELSE               'failed'
-      END)::tracer.execution_status,
-      ts,
-      CASE WHEN r >= 0.20 THEN ts + ((0.1 + random() * 3.9) * interval '1 hour') ELSE NULL END
+      tk.id                                                              AS task_id,
+      e                                                                  AS attempt,
+      random()                                                           AS r,
+      '2026-04-01'::timestamptz + (random() * interval '180 days')      AS ts
     FROM _seed_tasks tk
-    CROSS JOIN generate_series(1, 2) e
-    CROSS JOIN LATERAL (
-      SELECT
-        random() AS r,
-        '2026-04-01'::timestamptz + (random() * interval '180 days') AS ts
-    ) rnd
+    CROSS JOIN generate_series(1, 10) e
+  ),
+  ins AS (
+    INSERT INTO tracer.executions
+      (tenant_id, task_id, attempt_number, status, started_at, finished_at)
+    SELECT
+      expanded.tenant_id,
+      expanded.task_id,
+      expanded.attempt,
+      (CASE
+        WHEN expanded.r < 0.05 THEN 'pending'
+        WHEN expanded.r < 0.12 THEN 'running'
+        WHEN expanded.r < 0.80 THEN 'completed'
+        ELSE                        'failed'
+      END)::tracer.execution_status,
+      expanded.ts,
+      CASE
+        WHEN expanded.r >= 0.12
+        THEN expanded.ts + ((0.1 + random() * 3.9) * interval '1 hour')
+        ELSE NULL
+      END
+    FROM expanded
     RETURNING id, tenant_id, started_at, status::text AS status
   )
   INSERT INTO _seed_execs (id, tenant_id, started_at, status)
