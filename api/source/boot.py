@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from source.database.pooling import db
 from source.presentation.middleware.tenant_middleware import TenantMiddleware
-from source.presentation.controllers import agents_controller, executions_controller, swarms_controller, errors_controller
+from source.presentation.controllers import agents_controller, dashboard_controller, executions_controller, swarms_controller, errors_controller
 
 
 @asynccontextmanager
@@ -18,6 +19,12 @@ app = FastAPI(title="Swampert API", lifespan=lifespan)
 
 app.add_middleware(TenantMiddleware)
 
+app.add_middleware(
+  CORSMiddleware,
+  allow_origin_regex=r"http://.*\.localhost(:\d+)?",
+  allow_methods=["*"], allow_headers=["*"])
+
+app.include_router(dashboard_controller.router,  prefix="/dashboard",  tags=["dashboard"])
 app.include_router(agents_controller.router,     prefix="/agents",     tags=["agents"])
 app.include_router(executions_controller.router, prefix="/executions", tags=["executions"])
 app.include_router(swarms_controller.router,     prefix="/swarms",     tags=["swarms"])
