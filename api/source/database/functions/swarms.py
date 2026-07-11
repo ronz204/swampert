@@ -1,7 +1,6 @@
 import asyncpg
 
 from uuid import UUID
-from decimal import Decimal
 from pydantic import BaseModel
 from source.database.pooling import db
 
@@ -16,7 +15,7 @@ class SwarmSuccessRateRow(BaseModel):
   total_tareas: int
   completadas: int
   fallidas: int
-  tasa_exito: Decimal | None
+  tasa_exito: float | None
 
 
 class SwarmSuccessRate:

@@ -1,7 +1,6 @@
 import asyncpg
 
 from uuid import UUID
-from decimal import Decimal
 from datetime import datetime
 from pydantic import BaseModel
 from source.database.pooling import db
@@ -16,7 +15,7 @@ class AgentActivityRow(BaseModel):
   agente: str
   role: str
   total_steps: int
-  tokens_promedio: Decimal | None
+  tokens_promedio: float | None
   ultima_actividad: datetime | None
 
 

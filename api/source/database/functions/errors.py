@@ -35,7 +35,7 @@ class TopByErrors:
       args.append(f"%{filters.task}%")
       conditions.append(f"t.title ILIKE ${len(args)}")
 
-    where = ("WHERE " + " AND ".join(conditions)) if conditions else "WHERE ee.severity IN ('high', 'critical')"
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     args.append(filters.limit)
 
     return await db.fetch(f"""

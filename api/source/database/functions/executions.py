@@ -23,7 +23,7 @@ class TopByCostRow(BaseModel):
 class TopByCost:
   @staticmethod
   async def run(filters: TopByCostFilters) -> list[asyncpg.Record]:
-    where = "AND e.status = $2" if filters.status else ""
+    where = "WHERE e.status = $2" if filters.status else ""
     args = [filters.limit, filters.status] if filters.status else [filters.limit]
 
     return await db.fetch(f"""
