@@ -69,9 +69,6 @@
     <BarChart data={data.topCost} title="Top ejecuciones por costo" />
   </div>
 
-  <!-- Line chart: full width -->
-  <div class="grid grid-cols-2 gap-3">
-    <LineChart data={data.timeline} />
-  </div>
+  <LineChart data={data.timeline} />
 
 </div>

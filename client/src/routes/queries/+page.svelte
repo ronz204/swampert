@@ -22,78 +22,126 @@
 
   let activeQuery = $state<QueryId>("q1");
 
-  // ── Q1 filters ───────────────────────────────────────────────────────────────
-  let statusFilters = $state<ExecutionStatus[]>([]);
-  const filteredQ1 = $derived(
-    statusFilters.length === 0
-      ? data.topCost
-      : data.topCost.filter(r => statusFilters.includes(r.status))
+  // ── staged: lo que el usuario selecciona en el panel (no confirma hasta Aplicar)
+  let staged = $state({
+    status:              [] as ExecutionStatus[],
+    swarmSearch:         "",
+    roleFilter:          "",
+    timelineSwarmSearch: "",
+    severity:            ["critical", "high"] as ErrorSeverity[],
+  });
+
+  // ── applied: lo que realmente filtra la tabla
+  let applied = $state({
+    status:              [] as ExecutionStatus[],
+    swarmSearch:         "",
+    roleFilter:          "",
+    timelineSwarmSearch: "",
+    severity:            ["critical", "high"] as ErrorSeverity[],
+  });
+
+  const isDirty = $derived(
+    staged.status.join()       !== applied.status.join()       ||
+    staged.swarmSearch         !== applied.swarmSearch         ||
+    staged.roleFilter          !== applied.roleFilter          ||
+    staged.timelineSwarmSearch !== applied.timelineSwarmSearch ||
+    staged.severity.join()     !== applied.severity.join()
   );
 
-  // ── Q2 filters ───────────────────────────────────────────────────────────────
-  let swarmSearch = $state("");
-  const filteredQ2 = $derived(
-    swarmSearch.trim() === ""
-      ? data.successRate
-      : data.successRate.filter(r =>
-          r.swarm.toLowerCase().includes(swarmSearch.toLowerCase())
-        )
-  );
-
-  // ── Q3 filters ───────────────────────────────────────────────────────────────
-  let roleFilter = $state("");
-  const filteredQ3 = $derived(
-    roleFilter === ""
-      ? data.agentActivity
-      : data.agentActivity.filter(r => r.role === roleFilter)
-  );
-  const agentRoles = $derived([...new Set(data.agentActivity.map(r => r.role))].sort());
-
-  // ── Q4 filters ───────────────────────────────────────────────────────────────
-  let timelineSwarmSearch = $state("");
-  const filteredQ4 = $derived(
-    timelineSwarmSearch.trim() === ""
-      ? data.timeline
-      : data.timeline.filter(r =>
-          r.swarm.toLowerCase().includes(timelineSwarmSearch.toLowerCase())
-        )
-  );
-
-  // ── Q5 filters ───────────────────────────────────────────────────────────────
-  const ALL_SEVERITIES: ErrorSeverity[] = ["critical", "high", "medium", "low"];
-  let severityFilters = $state<ErrorSeverity[]>(["critical", "high"]);
-  const filteredQ5 = $derived(
-    severityFilters.length === 0
-      ? data.topErrors
-      : data.topErrors.filter(r => severityFilters.includes(r.severity as ErrorSeverity))
-  );
-
-  function toggleSeverity(s: ErrorSeverity) {
-    severityFilters = severityFilters.includes(s)
-      ? severityFilters.filter(x => x !== s)
-      : [...severityFilters, s];
-  }
-
-  function toggleStatus(s: ExecutionStatus) {
-    statusFilters = statusFilters.includes(s)
-      ? statusFilters.filter(x => x !== s)
-      : [...statusFilters, s];
+  function applyFilters() {
+    applied.status              = [...staged.status];
+    applied.swarmSearch         = staged.swarmSearch;
+    applied.roleFilter          = staged.roleFilter;
+    applied.timelineSwarmSearch = staged.timelineSwarmSearch;
+    applied.severity            = [...staged.severity];
   }
 
   function resetFilters() {
-    statusFilters = [];
-    swarmSearch = "";
-    roleFilter = "";
-    timelineSwarmSearch = "";
-    severityFilters = ["critical", "high"];
+    staged.status              = [];
+    staged.swarmSearch         = "";
+    staged.roleFilter          = "";
+    staged.timelineSwarmSearch = "";
+    staged.severity            = ["critical", "high"];
+    applyFilters();
   }
 
+  // ── tablas filtradas usan applied ───────────────────────────────────────────
+  const filteredQ1 = $derived(
+    applied.status.length === 0
+      ? data.topCost
+      : data.topCost.filter(r => applied.status.includes(r.status))
+  );
+
+  const filteredQ2 = $derived(
+    applied.swarmSearch.trim() === ""
+      ? data.successRate
+      : data.successRate.filter(r =>
+          r.swarm.toLowerCase().includes(applied.swarmSearch.toLowerCase())
+        )
+  );
+
+  const filteredQ3 = $derived(
+    applied.roleFilter === ""
+      ? data.agentActivity
+      : data.agentActivity.filter(r => r.role === applied.roleFilter)
+  );
+
+  const agentRoles = $derived([...new Set(data.agentActivity.map(r => r.role))].sort());
+
+  const filteredQ4 = $derived(
+    applied.timelineSwarmSearch.trim() === ""
+      ? data.timeline
+      : data.timeline.filter(r =>
+          r.swarm.toLowerCase().includes(applied.timelineSwarmSearch.toLowerCase())
+        )
+  );
+
+  const filteredQ5 = $derived(
+    applied.severity.length === 0
+      ? data.topErrors
+      : data.topErrors.filter(r => applied.severity.includes(r.severity as ErrorSeverity))
+  );
+
+  // ── toggle helpers operan sobre staged ──────────────────────────────────────
+  function toggleStatus(s: ExecutionStatus) {
+    staged.status = staged.status.includes(s)
+      ? staged.status.filter(x => x !== s)
+      : [...staged.status, s];
+  }
+
+  function toggleSeverity(s: ErrorSeverity) {
+    staged.severity = staged.severity.includes(s)
+      ? staged.severity.filter(x => x !== s)
+      : [...staged.severity, s];
+  }
+
+  // ── chips reflejan applied (lo que está activo en la tabla) ─────────────────
+  const ALL_SEVERITIES: ErrorSeverity[] = ["critical", "high", "medium", "low"];
+
   const activeChips = $derived<{ label: string; remove: () => void }[]>([
-    ...statusFilters.map(s => ({ label: `Status: ${s}`, remove: () => toggleStatus(s) })),
-    ...(swarmSearch && activeQuery === "q2" ? [{ label: `Swarm: ${swarmSearch}`, remove: () => { swarmSearch = ""; } }] : []),
-    ...(roleFilter && activeQuery === "q3" ? [{ label: `Rol: ${roleFilter}`, remove: () => { roleFilter = ""; } }] : []),
-    ...(timelineSwarmSearch && activeQuery === "q4" ? [{ label: `Swarm: ${timelineSwarmSearch}`, remove: () => { timelineSwarmSearch = ""; } }] : []),
-    ...((activeQuery === "q5" ? severityFilters : []).map(s => ({ label: `Severidad: ${s}`, remove: () => toggleSeverity(s) }))),
+    ...applied.status.map(s => ({
+      label: `Status: ${s}`,
+      remove: () => {
+        applied.status = applied.status.filter(x => x !== s);
+        staged.status  = staged.status.filter(x => x !== s);
+      },
+    })),
+    ...(applied.swarmSearch && activeQuery === "q2"
+      ? [{ label: `Swarm: ${applied.swarmSearch}`, remove: () => { applied.swarmSearch = ""; staged.swarmSearch = ""; } }]
+      : []),
+    ...(applied.roleFilter && activeQuery === "q3"
+      ? [{ label: `Rol: ${applied.roleFilter}`, remove: () => { applied.roleFilter = ""; staged.roleFilter = ""; } }]
+      : []),
+    ...(applied.timelineSwarmSearch && activeQuery === "q4"
+      ? [{ label: `Swarm: ${applied.timelineSwarmSearch}`, remove: () => { applied.timelineSwarmSearch = ""; staged.timelineSwarmSearch = ""; } }]
+      : []),
+    ...(activeQuery === "q5" ? applied.severity : []).map(s => ({
+      label: `Severidad: ${s}`,
+      remove: () => {
+        applied.severity = applied.severity.filter(x => x !== s);
+        staged.severity  = staged.severity.filter(x => x !== s);
+      },
+    })),
   ]);
 
   const rowCount = $derived({
@@ -124,7 +172,7 @@
                 <input
                   type="checkbox"
                   class="accent-current"
-                  checked={statusFilters.includes(s as ExecutionStatus)}
+                  checked={staged.status.includes(s as ExecutionStatus)}
                   onchange={() => toggleStatus(s as ExecutionStatus)}
                 />
                 <span class="font-mono text-xs text-ink capitalize">{s}</span>
@@ -147,7 +195,7 @@
           placeholder="Buscar swarm…"
           class="w-full rounded border border-border bg-void px-2 py-1.5 font-mono text-xs
             text-ink placeholder:text-subtext focus:border-current focus:outline-none"
-          bind:value={swarmSearch}
+          bind:value={staged.swarmSearch}
         />
       </div>
     {/if}
@@ -164,8 +212,8 @@
                   type="radio"
                   name="role"
                   class="accent-current"
-                  checked={roleFilter === role}
-                  onchange={() => { roleFilter = roleFilter === role ? "" : role; }}
+                  checked={staged.roleFilter === role}
+                  onchange={() => { staged.roleFilter = staged.roleFilter === role ? "" : role; }}
                 />
                 <span class="font-mono text-xs text-ink">{role}</span>
                 <span class="ml-auto font-mono text-xs text-subtext">
@@ -187,7 +235,7 @@
           placeholder="Buscar swarm…"
           class="w-full rounded border border-border bg-void px-2 py-1.5 font-mono text-xs
             text-ink placeholder:text-subtext focus:border-current focus:outline-none"
-          bind:value={timelineSwarmSearch}
+          bind:value={staged.timelineSwarmSearch}
         />
       </div>
     {/if}
@@ -203,7 +251,7 @@
                 <input
                   type="checkbox"
                   class="accent-current"
-                  checked={severityFilters.includes(sev)}
+                  checked={staged.severity.includes(sev)}
                   onchange={() => toggleSeverity(sev)}
                 />
                 <span class="font-mono text-xs capitalize
@@ -228,6 +276,17 @@
         onclick={resetFilters}
       >
         Reiniciar
+      </button>
+      <button
+        type="button"
+        class="flex-1 rounded px-3 py-1.5 text-xs font-medium transition-all
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-current
+          {isDirty ? 'text-void hover:opacity-90 cursor-pointer' : 'text-subtext cursor-default'}"
+        style:background-color={isDirty ? "var(--color-current)" : "transparent"}
+        onclick={applyFilters}
+        disabled={!isDirty}
+      >
+        Aplicar
       </button>
     </div>
   </aside>

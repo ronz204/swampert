@@ -105,7 +105,7 @@
   });
 </script>
 
-<div class="col-span-2 flex flex-col rounded-lg border border-border bg-panel p-5">
+<div class="flex flex-col rounded-lg border border-border bg-panel p-5">
   <p class="mb-0.5 text-sm font-medium text-ink">Tendencia de ejecuciones</p>
   <p class="mb-4 font-mono text-xs text-subtext">completadas vs fallidas por mes</p>
   <div class="relative h-44 flex-1">

@@ -1,7 +1,6 @@
 <script lang="ts">
-  import type { TopByErrorsRow } from "@models/entities";
+  import type { TopByErrorsRow, ErrorSeverity } from "@models/entities";
   import StatusBadge from "@shared/atoms/StatusBadge.svelte";
-  import type { ErrorSeverity } from "@models/entities";
 
   let { rows }: { rows: TopByErrorsRow[] } = $props();
 </script>
