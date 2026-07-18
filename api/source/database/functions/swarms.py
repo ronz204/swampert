@@ -1,6 +1,7 @@
 import asyncpg
 
 from uuid import UUID
+from datetime import datetime, timezone
 from pydantic import BaseModel
 from source.database.pooling import db
 
@@ -41,4 +42,45 @@ class SwarmSuccessRate:
       {where}
       GROUP BY s.id, s.name
       ORDER BY tasa_exito DESC NULLS LAST
+    """, *args)
+
+
+class SwarmCostFilters(BaseModel):
+  from_date: str | None = None
+  to_date: str | None = None
+
+
+class SwarmCostRow(BaseModel):
+  swarm_id: UUID
+  swarm: str
+  costo_total: float
+
+
+class SwarmCost:
+  @staticmethod
+  async def run(filters: SwarmCostFilters) -> list[asyncpg.Record]:
+    conditions = []
+    args: list = []
+
+    if filters.from_date:
+      args.append(datetime.fromisoformat(filters.from_date).replace(tzinfo=timezone.utc))
+      conditions.append(f"e.started_at >= ${len(args)}")
+    if filters.to_date:
+      args.append(datetime.fromisoformat(filters.to_date).replace(tzinfo=timezone.utc))
+      conditions.append(f"e.started_at < ${len(args)}")
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    return await db.fetch(f"""
+      SELECT
+        s.id                     AS swarm_id,
+        s.name                   AS swarm,
+        SUM(tc.estimated_cost)   AS costo_total
+      FROM tracer.token_costs   tc
+      JOIN tracer.executions    e  ON e.id  = tc.execution_id
+      JOIN core.tasks           t  ON t.id  = e.task_id
+      JOIN core.swarms          s  ON s.id  = t.swarm_id
+      {where}
+      GROUP BY s.id, s.name
+      ORDER BY costo_total DESC
     """, *args)

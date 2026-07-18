@@ -254,25 +254,61 @@ BEGIN
   )
   INSERT INTO _seed_steps (id) SELECT id FROM ins;
 
-  -- token_costs: 1 garantizado por execution + 50 % de chance de un segundo = ~600
+  -- token_costs: 1 garantizado por execution + 50 % de chance de un segundo = ~7500
+  -- el rango de tokens escala con la prioridad de la task (low/medium/high),
+  -- para que el costo tenga variación estructural real y no solo ruido
+  -- uniforme parejo — sin esto, un "top N por costo" siempre selecciona la
+  -- cola de una distribución angosta y las barras terminan casi idénticas.
+  --
+  -- IMPORTANTE (mismo gotcha que el bloque de executions más arriba):
+  -- random() dentro de un CROSS JOIN LATERAL (SELECT ...) sin FROM se evalúa
+  -- una sola vez por consulta, no por fila — el planner lo trata como
+  -- subquery constante aunque referencie columnas externas. Solución: CTE con
+  -- FROM explícito, igual que en el bloque 2.
+  WITH expanded AS (
+    SELECT
+      ex.tenant_id,
+      ex.id                                                              AS execution_id,
+      ex.started_at,
+      c,
+      (CASE t.priority
+        WHEN 'high'   THEN 3.0
+        WHEN 'medium' THEN 1.5
+        ELSE               1.0
+      END)                                                                AS mult,
+      random()                                                            AS r_inp,
+      random()                                                            AS r_out,
+      random()                                                            AS r_time,
+      random()                                                            AS r_keep
+    FROM tracer.executions ex
+    JOIN core.tasks        t  ON t.id = ex.task_id
+    CROSS JOIN generate_series(1, 2) c
+    WHERE ex.id IN (SELECT id FROM _seed_execs)
+  ),
+  priced AS (
+    SELECT
+      tenant_id,
+      execution_id,
+      started_at,
+      r_time,
+      r_keep,
+      c,
+      (100 + r_inp * 3900 * mult)::int AS inp,
+      (50  + r_out * 950  * mult)::int AS out_
+    FROM expanded
+  )
   INSERT INTO tracer.token_costs
     (tenant_id, execution_id, step_id, input_tokens, output_tokens, estimated_cost, recorded_at)
   SELECT
-    ex.tenant_id,
-    ex.id,
+    tenant_id,
+    execution_id,
     NULL,
     inp,
     out_,
     round((inp * 0.000003 + out_ * 0.000015)::numeric, 4),
-    ex.started_at + (random() * interval '4 hours')
-  FROM _seed_execs ex
-  CROSS JOIN generate_series(1, 2) c
-  CROSS JOIN LATERAL (
-    SELECT
-      (200 + random() * 3800)::int AS inp,
-      (50  + random() * 950)::int  AS out_
-  ) tokens
-  WHERE c = 1 OR random() < 0.5;
+    started_at + (r_time * interval '4 hours')
+  FROM priced
+  WHERE c = 1 OR r_keep < 0.5;
 
   -- execution_errors: solo para executions fallidas (~20 % = ~80 filas)
   INSERT INTO tracer.execution_errors

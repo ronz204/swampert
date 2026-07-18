@@ -7,8 +7,18 @@ router = APIRouter()
 
 
 @router.get("/cost", response_model=list[TopByCostRow])
-async def get_top_by_cost(limit: int = 20, status: str | None = None):
-  rows = await TopByCost.run(TopByCostFilters(limit=limit, status=status))
+async def get_top_by_cost(
+  limit: int = 20,
+  status: str | None = None,
+  from_date: str | None = None,
+  to_date: str | None = None,
+):
+  rows = await TopByCost.run(TopByCostFilters(
+    limit=limit,
+    status=status,
+    from_date=from_date,
+    to_date=to_date,
+  ))
   return [dict(r) for r in rows]
 
 

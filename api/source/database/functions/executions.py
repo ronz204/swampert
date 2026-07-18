@@ -1,7 +1,7 @@
 import asyncpg
 
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel
 from source.database.pooling import db
 
@@ -9,6 +9,8 @@ from source.database.pooling import db
 class TopByCostFilters(BaseModel):
   limit: int = 20
   status: str | None = None
+  from_date: str | None = None
+  to_date: str | None = None
 
 
 class TopByCostRow(BaseModel):
@@ -23,8 +25,21 @@ class TopByCostRow(BaseModel):
 class TopByCost:
   @staticmethod
   async def run(filters: TopByCostFilters) -> list[asyncpg.Record]:
-    where = "WHERE e.status = $2" if filters.status else ""
-    args = [filters.limit, filters.status] if filters.status else [filters.limit]
+    conditions = []
+    args: list = []
+
+    if filters.status:
+      args.append(filters.status)
+      conditions.append(f"e.status = ${len(args)}")
+    if filters.from_date:
+      args.append(datetime.fromisoformat(filters.from_date).replace(tzinfo=timezone.utc))
+      conditions.append(f"e.started_at >= ${len(args)}")
+    if filters.to_date:
+      args.append(datetime.fromisoformat(filters.to_date).replace(tzinfo=timezone.utc))
+      conditions.append(f"e.started_at < ${len(args)}")
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    args.append(filters.limit)
 
     return await db.fetch(f"""
       SELECT
@@ -40,5 +55,5 @@ class TopByCost:
       {where}
       GROUP BY e.id, e.status, e.started_at, t.title
       ORDER BY costo_total DESC
-      LIMIT $1
+      LIMIT ${len(args)}
     """, *args)
