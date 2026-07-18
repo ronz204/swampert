@@ -1,12 +1,24 @@
 <script lang="ts">
   import { page } from "$app/stores";
+  import { invalidate } from "$app/navigation";
   import { tenant } from "@common/stores/tenant.svelte";
-  import { daterange } from "@common/stores/daterange.svelte";
+  import { daterange, DATERANGE_DEP } from "@common/stores/daterange.svelte";
 
   const tabs = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/queries",   label: "Consultas" },
   ];
+
+  // ── staged: lo que el usuario edita en los inputs, no confirma hasta Aplicar
+  let staged = $state({ from: daterange.from, to: daterange.to });
+
+  const isDirty = $derived(staged.from !== daterange.from || staged.to !== daterange.to);
+
+  function applyDateRange() {
+    daterange.from = staged.from;
+    daterange.to   = staged.to;
+    invalidate(DATERANGE_DEP);
+  }
 </script>
 
 <header
@@ -46,7 +58,7 @@
       type="date"
       class="rounded border border-border bg-void px-2 py-1 font-mono text-xs text-ink
         focus:border-current focus:outline-none"
-      bind:value={daterange.from}
+      bind:value={staged.from}
     />
     <span class="text-subtext">—</span>
     <label class="sr-only" for="to-date">Hasta</label>
@@ -55,7 +67,19 @@
       type="date"
       class="rounded border border-border bg-void px-2 py-1 font-mono text-xs text-ink
         focus:border-current focus:outline-none"
-      bind:value={daterange.to}
+      bind:value={staged.to}
     />
+    <button
+      type="button"
+      class="rounded px-3 py-1 text-xs font-medium transition-all
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-current
+        {isDirty ? 'text-void hover:opacity-90 cursor-pointer' : 'text-subtext cursor-default'}"
+      style:background-color={isDirty ? "var(--color-current)" : "transparent"}
+      style:border={isDirty ? "none" : "1px solid var(--color-border)"}
+      onclick={applyDateRange}
+      disabled={!isDirty}
+    >
+      Aplicar
+    </button>
   </div>
 </header>

@@ -1,3 +1,5 @@
+export const DATERANGE_DEP = "app:daterange";
+
 function defaultFrom(): string {
   const d = new Date();
   d.setDate(d.getDate() - 7);

@@ -3,25 +3,30 @@
     Chart, BarElement, BarController, CategoryScale,
     LinearScale, Tooltip,
   } from "chart.js";
-  import type { TopByCostRow } from "@models/entities";
 
   Chart.register(BarElement, BarController, CategoryScale, LinearScale, Tooltip);
 
-  interface Props {
-    data:   TopByCostRow[];
-    title:  string;
-    color?: string;
+  export interface BarDatum {
+    label: string;
+    value: number;
   }
 
-  let { data, title, color = "#E8A33D" }: Props = $props();
+  interface Props {
+    data:     BarDatum[];
+    title:    string;
+    subtitle?: string;
+    color?:   string;
+  }
+
+  let { data, title, subtitle = "costo estimado en USD", color = "#E8A33D" }: Props = $props();
 
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
 
   $effect(() => {
-    const sorted = [...data].sort((a, b) => Number(b.costo_total) - Number(a.costo_total)).slice(0, 10);
-    const labels = sorted.map(r => r.tarea.replace(/ #\d+$/, "").slice(0, 26));
-    const values = sorted.map(r => Number(r.costo_total));
+    const sorted = [...data].sort((a, b) => b.value - a.value).slice(0, 10);
+    const labels = sorted.map(r => r.label.slice(0, 26));
+    const values = sorted.map(r => r.value);
 
     chart?.destroy();
     chart = new Chart(canvas, {
@@ -76,7 +81,7 @@
 
 <div class="flex flex-col rounded-lg border border-border bg-panel p-5">
   <p class="mb-0.5 text-sm font-medium text-ink">{title}</p>
-  <p class="mb-4 font-mono text-xs text-subtext">costo estimado en USD</p>
+  <p class="mb-4 font-mono text-xs text-subtext">{subtitle}</p>
   <div class="relative h-52 flex-1">
     <canvas bind:this={canvas}></canvas>
   </div>

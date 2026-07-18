@@ -5,6 +5,7 @@ import type {
   ExecutionsByMonthRow,
   ExecutionStatus,
   SwarmSuccessRateRow,
+  SwarmCostRow,
   AgentActivityRow,
   TopByErrorsRow,
   ErrorSeverity,
@@ -25,8 +26,10 @@ export async function getKPIs(params?: KPIsParams): Promise<DashboardKPIs> {
 // ---- Executions --------------------------------------------------------------
 
 export interface TopByCostParams {
-  limit?:  number;
-  status?: ExecutionStatus;
+  limit?:     number;
+  status?:    ExecutionStatus;
+  from_date?: string;
+  to_date?:   string;
 }
 
 export interface TimelineParams {
@@ -54,6 +57,16 @@ export interface SuccessRateParams {
 
 export async function getSuccessRate(params?: SuccessRateParams): Promise<SwarmSuccessRateRow[]> {
   const { data } = await instance.get<SwarmSuccessRateRow[]>("/swarms/success-rate", { params });
+  return data;
+}
+
+export interface SwarmCostParams {
+  from_date?: string;
+  to_date?:   string;
+}
+
+export async function getCostBySwarm(params?: SwarmCostParams): Promise<SwarmCostRow[]> {
+  const { data } = await instance.get<SwarmCostRow[]>("/swarms/cost", { params });
   return data;
 }
 

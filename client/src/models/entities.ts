@@ -35,6 +35,12 @@ export interface SwarmSuccessRateRow {
   tasa_exito:   number | null;
 }
 
+export interface SwarmCostRow {
+  swarm_id:    string;
+  swarm:       string;
+  costo_total: number;
+}
+
 export interface AgentActivityRow {
   agent_id:         string;
   agente:           string;

@@ -21,6 +21,32 @@
             : "completed"
       )
   );
+
+  // distribución de execution_status del rango activo, agregada a partir del
+  // mismo timeline que alimenta la línea de tendencia — no hace falta un
+  // endpoint aparte porque total/completadas/fallidas/en_curso ya vienen ahí
+  const statusCounts = $derived.by(() => {
+    const acc = data.timeline.reduce(
+      (a, r) => {
+        a.completed += r.completadas;
+        a.failed    += r.fallidas;
+        a.running   += r.en_curso;
+        a.total     += r.total;
+        return a;
+      },
+      { completed: 0, failed: 0, running: 0, total: 0 },
+    );
+    return {
+      completed: acc.completed,
+      failed:    acc.failed,
+      running:   acc.running,
+      pending:   Math.max(acc.total - acc.completed - acc.failed - acc.running, 0),
+    };
+  });
+
+  const costBySwarm = $derived(
+    data.costBySwarm.map(r => ({ label: r.swarm, value: r.costo_total })),
+  );
 </script>
 
 <svelte:head>
@@ -65,8 +91,8 @@
 
   <!-- Charts: 2 columns -->
   <div class="grid grid-cols-2 gap-3">
-    <DonutChart data={data.successRate} />
-    <BarChart data={data.topCost} title="Top ejecuciones por costo" />
+    <DonutChart data={statusCounts} />
+    <BarChart data={costBySwarm} title="Costo por swarm" subtitle="costo estimado en USD, por swarm" />
   </div>
 
   <LineChart data={data.timeline} />

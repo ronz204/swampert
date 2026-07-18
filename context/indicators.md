@@ -127,10 +127,10 @@ por el middleware) retorna el siguiente shape:
 
 ```json
 {
-  "executions_24h": 1204,
-  "total_cost":     312.40,
-  "error_rate":     3.2,
-  "active_agents":  18
+  "executions_count": 1204,
+  "total_cost":        312.40,
+  "error_rate":        3.2,
+  "active_agents":     18
 }
 ```
 

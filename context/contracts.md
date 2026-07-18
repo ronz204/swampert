@@ -78,6 +78,8 @@ Top de executions ordenadas por costo total de tokens descendente.
 |---|---|---|---|
 | `limit` | `integer` | `20` | Máximo de filas retornadas |
 | `status` | `string` | — | Filtra por status exacto: `pending` · `running` · `completed` · `failed` |
+| `from_date` | `string` | — | Límite inferior inclusivo de `started_at` — formato `YYYY-MM-DD` |
+| `to_date` | `string` | — | Límite superior exclusivo de `started_at` — formato `YYYY-MM-DD` |
 
 **Respuesta** `200 application/json` — array de:
 
@@ -140,6 +142,30 @@ Tasa de éxito por swarm: completadas vs fallidas sobre el total de executions.
 | `tasa_exito` | `number \| null` | porcentaje con 1 decimal · `null` si no hay executions |
 
 Ordenado por `tasa_exito DESC NULLS LAST`.
+
+---
+
+### GET `/swarms/cost`
+
+Costo total agregado por swarm. Alimenta el bar chart "Costo por swarm" del
+Dashboard (pantalla 1) — ver `uidesign.md`.
+
+**Query params**
+
+| Param | Tipo | Default | Descripción |
+|---|---|---|---|
+| `from_date` | `string` | — | Límite inferior inclusivo de `started_at` — formato `YYYY-MM-DD` |
+| `to_date` | `string` | — | Límite superior exclusivo de `started_at` — formato `YYYY-MM-DD` |
+
+**Respuesta** `200 application/json` — array de:
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `swarm_id` | `uuid` | |
+| `swarm` | `string` | nombre del swarm |
+| `costo_total` | `number` | suma de `estimated_cost` en USD de las ejecuciones del swarm en el rango |
+
+Ordenado por `costo_total DESC`.
 
 ---
 
